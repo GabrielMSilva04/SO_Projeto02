@@ -1,3 +1,8 @@
+#define CHECKING_IN 0
+#define AT_TABLE 1
+#define WAITING 2
+// other states as needed...
+
 /**
  *  \file semSharedMemGroup.c (implementation file)
  *
@@ -189,6 +194,7 @@ static void eat (int id)
 static void checkInAtReception(int id)
 {
     // TODO insert your code here
+    bool isFirstGroup = false;
 
     if (semDown (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
@@ -196,6 +202,27 @@ static void checkInAtReception(int id)
     }
 
     // TODO insert your code here
+    // Check if this is the first group to check in
+    if (sh->fSt.groupsWaiting == 0) {
+        isFirstGroup = true;
+    }
+    sh->fSt.groupsWaiting++; // Increment the number of groups waiting
+    sh->fSt.receptionistRequest.reqType = TABLEREQ; // Use the TABLEREQ for the check-in request
+    sh->fSt.receptionistRequest.reqGroup = id;
+
+    sh->fSt.st.groupStat[id] = ATRECEPTION; // Update group status to ATRECEPTION
+    saveState(nFic, &sh->fSt); // Save the state
+
+    
+    // Check table availability
+    bool isTableAvailable = checkTableAvailability(id);
+    if (isTableAvailable) {
+        sh->fSt.st.groupStat[id] = AT_TABLE; // Update group status to AT_TABLE if a table is available
+    } else {
+        sh->fSt.st.groupStat[id] = WAITING; // Update group status to WAITING if no table is available
+    }
+    saveState(nFic, &sh->fSt); // Save the state again
+
 
     if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
         perror ("error on the up operation for semaphore access (CT)");
@@ -203,7 +230,7 @@ static void checkInAtReception(int id)
     }
 
     // TODO insert your code here
-
+    return isFirstGroup;
 }
 
 /**
