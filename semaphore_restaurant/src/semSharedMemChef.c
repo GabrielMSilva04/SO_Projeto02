@@ -168,6 +168,7 @@ static void waitForOrder ()
  */
 static void processOrder ()
 {
+    // Simulate cooking time
     usleep((unsigned int) floor ((MAXCOOK * random ()) / RAND_MAX + 100.0));
 
     //TODO insert your code here
@@ -178,6 +179,10 @@ static void processOrder ()
     }
 
     //TODO insert your code here
+    // Update chef's state to COOK and record the last group
+    sh->fSt.st.chefStat = COOK; // COOK state indicates the chef is cooking
+    lastGroup = sh->fSt.waiterRequest.reqGroup; // Update lastGroup with the group ID from the waiter's request
+    saveState(nFic, &sh->fSt); // Save the state
 
     if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
         perror ("error on the up operation for semaphore access (PT)");
@@ -185,5 +190,10 @@ static void processOrder ()
     }
 
     //TODO insert your code here
+    // Signal the waiter that food is ready
+    if (semUp(semgid, sh->orderReceived) == -1) { // orderReceived semaphore signals the waiter
+        perror("error on the up operation for order received semaphore (PT)");
+        exit(EXIT_FAILURE);
+    }
 }
 
