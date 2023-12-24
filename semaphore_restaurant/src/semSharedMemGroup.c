@@ -345,6 +345,12 @@ static void checkOutAtReception (int id)
     }
 
     // TODO insert your code here
+    // Update group status to CHECKOUT
+    sh->fSt.st.groupStat[id] = CHECKOUT;
+    sh->fSt.receptionistRequest.reqType = BILLREQ; // BILLREQ for payment request
+    sh->fSt.receptionistRequest.reqGroup = id;
+    saveState(nFic, &sh->fSt); // Save the state
+
 
     if (semUp (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
@@ -352,6 +358,12 @@ static void checkOutAtReception (int id)
     }
 
     // TODO insert your code here
+    // Wait for receptionist to acknowledge the payment
+    if (semDown(semgid, sh->tableDone[id]) == -1) { // Using tableDone semaphore for payment acknowledgment
+        perror("error on the down operation for payment received semaphore (CT)");
+        exit(EXIT_FAILURE);
+    }
+
 
     if (semDown (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
@@ -359,6 +371,10 @@ static void checkOutAtReception (int id)
     }
 
     // TODO insert your code here
+    // Update group status to LEAVING
+    sh->fSt.st.groupStat[id] = LEAVING;
+    saveState(nFic, &sh->fSt); // Save the state again
+    
 
     if (semUp (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
