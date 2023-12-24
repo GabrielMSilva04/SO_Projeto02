@@ -213,8 +213,18 @@ static void checkInAtReception(int id)
     saveState(nFic, &sh->fSt); // Save the state
 
     
-    // Check table availability
-    bool isTableAvailable = checkTableAvailability(id);
+    // Determine table availability
+    bool isTableAvailable = false;
+    for (int i = 0; i < NUMTABLES; i++) { // Assuming NUMTABLES is the number of tables
+        if (sh->fSt.assignedTable[i] == -1) { // -1 indicates the table is not assigned
+            isTableAvailable = true;
+            sh->fSt.assignedTable[i] = id; // Assign the table to the group
+            sh->fSt.st.groupStat[id] = AT_TABLE;
+            break;
+        }
+    }
+
+
     if (isTableAvailable) {
         sh->fSt.st.groupStat[id] = AT_TABLE; // Update group status to AT_TABLE if a table is available
     } else {
@@ -374,7 +384,7 @@ static void checkOutAtReception (int id)
     // Update group status to LEAVING
     sh->fSt.st.groupStat[id] = LEAVING;
     saveState(nFic, &sh->fSt); // Save the state again
-    
+
 
     if (semUp (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
