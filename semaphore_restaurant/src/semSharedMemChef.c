@@ -127,6 +127,12 @@ static void waitForOrder ()
 {
 
     //TODO insert your code here
+    // Wait for a food order from the waiter
+    if (semDown(semgid, sh->waitOrder) == -1) { // waitOrder semaphore is signaled by the waiter
+        perror("error on the down operation for wait order semaphore (PT)");
+        exit(EXIT_FAILURE);
+    }
+
      
     if (semDown (semgid, sh->mutex) == -1) {                                                      /* enter critical region */
         perror ("error on the up operation for semaphore access (PT)");
@@ -134,6 +140,9 @@ static void waitForOrder ()
     }
 
     //TODO insert your code here
+    // Update chef's state to PROCESSING_ORDER or similar
+    sh->fSt.st.chefStat = WAIT_FOR_ORDER; // Chef is waiting for an order
+    saveState(nFic, &sh->fSt); // Save the state
     
 
     if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
@@ -142,6 +151,11 @@ static void waitForOrder ()
     }
 
     //TODO insert your code here
+    // Acknowledge the received order
+    if (semUp(semgid, sh->orderReceived) == -1) { // orderReceived semaphore is to acknowledge the reception of the order
+        perror("error on the up operation for order received semaphore (PT)");
+        exit(EXIT_FAILURE);
+    }
 }
 
 /**
