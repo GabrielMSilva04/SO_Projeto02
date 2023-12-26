@@ -149,9 +149,45 @@ int main (int argc, char *argv[])
  */
 static int decideTableOrWait(int n)
 {
-     //TODO insert your code here
+    //TODO insert your code here
+    if (semDown(semgid, sh->mutex) == -1) {  // enter critical region
+        perror("error on the down operation for semaphore access (RT)");
+        exit(EXIT_FAILURE);
+    }
 
-     return -1;
+    // Check if the group is yet to arrive or is already done
+    if (groupRecord[n] == TOARRIVE || groupRecord[n] == DONE) {
+        if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
+            perror("error on the down operation for semaphore access (RT)");
+            exit(EXIT_FAILURE);
+        }
+        return -1;  // Indicate that the group cannot be assigned a table
+    }
+
+    // Check each table to see if it is available
+    for (int tableId = 0; tableId < NUMTABLES; tableId++) {
+        if (sh->fSt.assignedTable[tableId] == -1) {
+            // Assign the group to this table
+            sh->fSt.assignedTable[tableId] = n;  // Assign the table to the group
+            groupRecord[n] = ATTABLE;             // Update group record to ATTABLE
+
+            if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
+                perror("error on the down operation for semaphore access (RT)");
+                exit(EXIT_FAILURE);
+            }
+
+            return tableId;  // Return the table ID
+        }
+    }
+
+    // If no table is available, the group must wait
+    groupRecord[n] = WAIT;  // Update group record to WAIT
+    if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
+        perror("error on the down operation for semaphore access (RT)");
+        exit(EXIT_FAILURE);
+    }
+
+    return -1;
 }
 
 /**
