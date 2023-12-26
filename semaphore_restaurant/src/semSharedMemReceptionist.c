@@ -240,7 +240,7 @@ static int decideNextGroup()
  */
 static request waitForGroup()
 {
-    request ret; 
+    request req; 
 
     if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
         perror ("error on the up operation for semaphore access (WT)");
@@ -263,7 +263,7 @@ static request waitForGroup()
     // Wait for a group to make a request
     // ... (rest of the logic remains the same)
 
-    return ret;
+    return req;
 
 }
 
@@ -284,6 +284,30 @@ static void provideTableOrWaitingRoom (int n)
     }
 
     // TODO insert your code here
+    // Decide if the group can be assigned a table or must wait
+    int tableId = decideTableOrWait(n);  // This function should return a table ID or -1 if the group must wait
+
+    if (tableId != -1) {
+        // If a table is available
+        // Update receptionist and group status
+        sh->fSt.st.receptionistStat = ASSIGNTABLE;  // Assuming ASSIGNTABLE is a defined state for assigning table
+        groupRecord[n] = ATTABLE;  // Update internal receptionist view
+
+        // Signal the group that it can proceed to the table
+        // Assuming 'waitForTable[n]' is the semaphore for the group to wait for a table
+        if (semUp(semgid, sh->waitForTable[n]) == -1) {
+            perror("error on the up operation for group wait for table semaphore (RT)");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        // If the group must wait
+        // Update receptionist and group status
+        sh->fSt.st.receptionistStat = WAIT;  // Assuming WAIT is a defined state for waiting
+        groupRecord[n] = WAIT;  // Update internal receptionist view
+    }
+
+    saveState(nFic, &sh->fSt);  // Save the state
+    
 
     if (semUp (semgid, sh->mutex) == -1) {                                               /* exit critical region */
         perror ("error on the down operation for semaphore access (WT)");
