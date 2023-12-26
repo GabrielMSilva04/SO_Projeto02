@@ -238,11 +238,24 @@ static void takeFoodToTable (int n)
         exit (EXIT_FAILURE);
     }
 
+
     // TODO insert your code here
+    // Update waiter's state (assuming there is a waiterStat field in the shared state)
+    sh->fSt.st.waiterStat = TAKE_TO_TABLE;
+    saveState(nFic, &sh->fSt); // Save the state
+
     
     if (semUp (semgid, sh->mutex) == -1)  {                                                  /* exit critical region */
         perror ("error on the down operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
+    }
+
+
+    // Inform the group that the food is available (assuming the tableId is known for this group)
+    int tableId = sh->fSt.assignedTable[n];
+    if (semUp(semgid, sh->foodArrived[tableId]) == -1) {
+        perror("error on the up operation for food arrived semaphore (WT)");
+        exit(EXIT_FAILURE);
     }
 }
 
