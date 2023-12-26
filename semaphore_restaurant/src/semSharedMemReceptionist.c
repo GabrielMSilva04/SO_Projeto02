@@ -200,9 +200,33 @@ static int decideTableOrWait(int n)
  */
 static int decideNextGroup()
 {
-     //TODO insert your code here
+    //TODO insert your code here
+    if (semDown(semgid, sh->mutex) == -1) {  // enter critical region
+        perror("error on the down operation for semaphore access (RT)");
+        exit(EXIT_FAILURE);
+    }
 
-     return -1;
+    int nextGroup = -1;
+    // Iterate through the groups to find the first one waiting
+    for (int i = 0; i < MAXGROUPS; i++) {
+        if (groupRecord[i] == WAIT) {
+            nextGroup = i;
+            break; // Found the next group to be seated
+        }
+    }
+
+    if (nextGroup != -1) {
+        // If a waiting group is found, update its state
+        groupRecord[nextGroup] = ATTABLE;
+        sh->fSt.st.groupStat[nextGroup] = ATTABLE;  // Update group status to ATTABLE
+    }
+
+    if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
+        perror("error on the down operation for semaphore access (RT)");
+        exit(EXIT_FAILURE);
+    }
+
+    return nextGroup; // Return the group ID or -1 if no group is waiting
 }
 
 /**
