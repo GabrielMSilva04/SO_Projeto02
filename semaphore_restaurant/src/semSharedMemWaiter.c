@@ -143,22 +143,22 @@ static request waitForClientOrChef()
     }
 
     // TODO insert your code here
-    // Wait for a request
-    if (semDown(semgid, sh->waiterRequest) == -1) {
-        perror("error on the down operation for semaphore access (WT)");
-        exit(EXIT_FAILURE);
+    // Check shared memory for the type of request
+    bool foundRequest = false;
+    for (int i = 0; i < MAXGROUPS; i++) {
+        if (sh->fSt.st.groupStat[i] == FOOD_REQUEST) {
+            req.reqType = FOODREQ;  // Assuming FOODREQ represents a food request from a group
+            req.reqGroup = i;       // Group identifier
+            foundRequest = true;
+            break;
+        }
     }
 
+    if (!foundRequest && sh->fSt.st.chefStat == FOODREADY) {
+        req.reqType = FOODREADY;  // Assuming FOODREADY represents the chef signaling that food is ready
+        // Additional logic to determine which group's food is ready, if necessary
+    }
 
-    // Call identifyAndReadRequest to get the integer identifier of the next request
-    int requestId = identifyAndReadRequest();
-
-    // Use the integer identifier to set the reqType field of the request object
-    req.reqType = requestId;
-
-    // TODO: Set additional details of the request here, based on requestId
-    // req.reqGroup = ...;
-    // req.otherDetails = ...;
 
     if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
         perror("error on the down operation for semaphore access (WT)");
