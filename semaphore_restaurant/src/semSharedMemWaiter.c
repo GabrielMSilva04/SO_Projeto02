@@ -193,7 +193,13 @@ static void informChef (int n)
         exit (EXIT_FAILURE);
     }
 
+
     // TODO insert your code here
+    // Inform the chef of the new order
+    sh->fSt.waiterRequest.reqGroup = n;  // Assuming waiterRequest is where the order info is stored
+    sh->fSt.st.waiterStat = INFORM_CHEF;  // Update waiter's state to INFORM_CHEF
+    saveState(nFic, &sh->fSt);  // Save the state
+
     
     if (semUp (semgid, sh->mutex) == -1)                                                   /* exit critical region */
     { perror ("error on the down operation for semaphore access (WT)");
@@ -202,6 +208,17 @@ static void informChef (int n)
 
     
     // TODO insert your code here
+    // Signal the chef that a new order is ready
+    if (semUp(semgid, sh->waitOrder) == -1) {
+        perror("error on the up operation for waitOrder semaphore (WT)");
+        exit(EXIT_FAILURE);
+    }
+
+    // Wait for acknowledgement from the chef
+    if (semDown(semgid, sh->orderReceived) == -1) {
+        perror("error on the down operation for order received semaphore (WT)");
+        exit(EXIT_FAILURE);
+    }
 
 }
 
