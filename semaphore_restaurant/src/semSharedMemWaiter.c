@@ -143,24 +143,32 @@ static request waitForClientOrChef()
     }
 
     // TODO insert your code here
-    
-    if (semUp (semgid, sh->mutex) == -1)      {                                             /* exit critical region */
-        perror ("error on the down operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    // Wait for a request
+    if (semDown(semgid, sh->waiterRequest) == -1) {
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
     }
 
-    // TODO insert your code here
 
-    if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
-        perror ("error on the up operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    // Call identifyAndReadRequest to get the integer identifier of the next request
+    int requestId = identifyAndReadRequest();
+
+    // Use the integer identifier to set the reqType field of the request object
+    req.reqType = requestId;
+
+    // TODO: Set additional details of the request here, based on requestId
+    // req.reqGroup = ...;
+    // req.otherDetails = ...;
+
+    if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
     }
 
-    // TODO insert your code here
-
-    if (semUp (semgid, sh->mutex) == -1) {                                                  /* exit critical region */
-        perror ("error on the down operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    // Signal readiness for new requests
+    if (semUp(semgid, sh->waiterRequestPossible) == -1) {
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
     }
 
     // TODO insert your code here
