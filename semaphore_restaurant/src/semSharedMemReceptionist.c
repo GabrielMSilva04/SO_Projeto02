@@ -1,3 +1,7 @@
+#define CHECKING_IN 0
+#define AT_TABLE 1
+#define WAITING 2
+
 /**
  *  \file semSharedReceptionist.c (implementation file)
  *
@@ -218,7 +222,7 @@ static int decideNextGroup()
     if (nextGroup != -1) {
         // If a waiting group is found, update its state
         groupRecord[nextGroup] = ATTABLE;
-        sh->fSt.st.groupStat[nextGroup] = ATTABLE;  // Update group status to ATTABLE
+        sh->fSt.st.groupStat[nextGroup] = AT_TABLE;  // Update group status to AT_TABLE
     }
 
     if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
@@ -307,7 +311,7 @@ static void provideTableOrWaitingRoom (int n)
     }
 
     saveState(nFic, &sh->fSt);  // Save the state
-    
+
 
     if (semUp (semgid, sh->mutex) == -1) {                                               /* exit critical region */
         perror ("error on the down operation for semaphore access (WT)");
@@ -334,6 +338,28 @@ static void receivePayment (int n)
     }
 
     // TODO insert your code here
+    // Update receptionist state to receiving payment
+    sh->fSt.st.receptionistStat = RECVPAY;  // Assuming RECVPAY is a defined state for receiving payment
+
+    // Mark the table as vacant
+    int tableId = sh->fSt.assignedTable[n];
+    sh->fSt.assignedTable[tableId] = -1; // -1 indicates the table is now vacant
+    groupRecord[n] = DONE;  // Update the internal receptionist view to indicate the group is done
+
+    // Check if there are waiting groups
+    int nextGroup = decideNextGroup();
+    if (nextGroup != -1) {
+        // If there is a waiting group, assign the newly vacant table to it
+        sh->fSt.assignedTable[tableId] = nextGroup;
+        groupRecord[nextGroup] = ATTABLE;  // Update the internal receptionist view
+        sh->fSt.st.groupStat[nextGroup] = AT_TABLE;  // Update group status to AT_TABLE
+        if (semUp(semgid, sh->waitForTable[nextGroup]) == -1) {
+            perror("error on the up operation for group wait for table semaphore (RT)");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    saveState(nFic, &sh->fSt);  // Save the state
 
     if (semUp (semgid, sh->mutex) == -1)  {                                                  /* exit critical region */
      perror ("error on the down operation for semaphore access (WT)");
