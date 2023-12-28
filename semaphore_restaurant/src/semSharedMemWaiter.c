@@ -106,6 +106,7 @@ int main (int argc, char *argv[])
     while( nReq < sh->fSt.nGroups*2 ) {
         puts("Começa a esperar");
         req = waitForClientOrChef();
+        puts("Acaba de esperar");
         switch(req.reqType) {
             case FOODREQ:
                 printf("Waiter received order from Group %d\n", req.reqGroup);
@@ -113,9 +114,7 @@ int main (int argc, char *argv[])
                 puts("Waiter informed chef");
                 break;
             case FOODREADY:
-                printf("Comida de grupo %d pronta\n", req.reqGroup);
                 takeFoodToTable(req.reqGroup);
-                printf("Waiter served group %d", req.reqGroup);
                 break;
         }
         nReq++;
@@ -143,7 +142,6 @@ static request waitForClientOrChef()
 {
     request req;
     bool foundRequest = false;
-
     while (!foundRequest) {
         if (semDown(semgid, sh->mutex) == -1) {
             perror("error on the down operation for semaphore access (WT)");
@@ -151,22 +149,34 @@ static request waitForClientOrChef()
         }
 
         // Check for group food requests
-        for (int i = 0; i < MAXGROUPS; i++) {
-            if (sh->fSt.st.groupStat[i] == FOOD_REQUEST) {
-                req.reqType = FOODREQ;
-                req.reqGroup = i;
-                foundRequest = true;
-                sh->fSt.st.groupStat[i] = WAIT_FOR_FOOD;
-                break;
+        if (!foundRequest) {
+            for (int i = 0; i < MAXGROUPS; i++) {
+                if (sh->fSt.st.groupStat[i] == FOOD_REQUEST) {
+                    req.reqType = FOODREQ;
+                    req.reqGroup = i;
+                    foundRequest = true;
+                    sh->fSt.st.groupStat[i] = WAIT_FOR_FOOD;
+                    break;
+                }
             }
         }
 
         // Check for chef's food ready signal
-        if (!foundRequest && sh->fSt.st.chefStat == FOODREADY) {
-            req.reqType = FOODREADY;
-            req.reqGroup = sh->fSt.foodGroup;
-            foundRequest = true;
+        if (!foundRequest) {
+            // Assuming waiterRequest is used by the chef to indicate when food is ready
+            if (sh->fSt.waiterRequest.reqType == FOODREADY) {
+                for (int i = 0; i < MAXGROUPS; i++) {
+                    if (sh->fSt.st.groupStat[i] == WAIT_FOR_FOOD) {
+                        req.reqType = FOODREADY;
+                        req.reqGroup = i;
+                        foundRequest = true;
+                        printf("Waiter served group %d\n", req.reqGroup);
+                        break;
+                    }
+                }
+            }
         }
+
 
         if (semUp(semgid, sh->mutex) == -1) {
             perror("error on the up operation for semaphore access (WT)");
@@ -174,9 +184,7 @@ static request waitForClientOrChef()
         }
 
         if (!foundRequest) {
-            // Implement a wait or exit condition if no request is found
-            // This could involve sleeping for a bit or exiting the loop after a timeout
-            sh->fSt.st.waiterStat = WAIT_FOR_REQUEST;
+            //parar request
         }
     }
 
@@ -243,31 +251,47 @@ static void informChef (int n)
  *  The internal state should be saved.
  *
  */
-static void takeFoodToTable (int n)
+static void takeFoodToTable(int n)
 {
-    if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
-        perror ("error on the up operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    if (semDown(semgid, sh->mutex) == -1) {                                                  /* enter critical region */
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
     }
 
-
-    // TODO insert your code here
-    // Update waiter's state (assuming there is a waiterStat field in the shared state)
+    // Update waiter's state to TAKE_TO_TABLE and save the state
     sh->fSt.st.waiterStat = TAKE_TO_TABLE;
     saveState(nFic, &sh->fSt); // Save the state
 
-    
-    if (semUp (semgid, sh->mutex) == -1)  {                                                  /* exit critical region */
-        perror ("error on the down operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    // Update the group's state to EAT and save the state
+    sh->fSt.st.groupStat[n] = EAT;
+    saveState(nFic, &sh->fSt); // Save the state again
+
+    if (semUp(semgid, sh->mutex) == -1) {                                                  /* exit critical region */
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
     }
 
-
-    // Inform the group that the food is available (assuming the tableId is known for this group)
-    int tableId = sh->fSt.assignedTable[n];
-    if (semUp(semgid, sh->foodArrived[tableId]) == -1) {
+    // Inform the group that the food is available
+    printf("Group %d should eat\n", n);
+    if (semUp(semgid, sh->foodArrived[n]) == -1) {
         perror("error on the up operation for food arrived semaphore (WT)");
         exit(EXIT_FAILURE);
     }
+
+    // After informing the group, enter critical region again to update waiter state
+    if (semDown(semgid, sh->mutex) == -1) {
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+
+    // Update waiter's state to WAIT_FOR_REQUEST after serving the food
+    sh->fSt.st.waiterStat = WAIT_FOR_REQUEST;
+    saveState(nFic, &sh->fSt); // Save the state again
+
+    if (semUp(semgid, sh->mutex) == -1) {                                                  /* exit critical region */
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
 }
+
 
