@@ -249,21 +249,6 @@ static bool checkInAtReception(int id)
         exit(EXIT_FAILURE);
     }
 
-
-    //while (true) {
-    //    int peopleAtTable = 0;
-    //    for (int i = 0; i < MAXGROUPS; i++) {
-    //        if (sh->fSt.st.groupStat[i] > ATRECEPTION && sh->fSt.st.groupStat[i] < CHECKOUT) {
-    //            peopleAtTable++;
-    //       }
-    //    }
-
-    //    if(peopleAtTable < NUMTABLES) {
-            //printf("Tables occupied: %d\n", peopleAtTable);
-    //        break;
-    //    }
-    //}
-
     return isFirstGroup;
 }
 
@@ -373,11 +358,13 @@ static void waitFood (int id)
  */
 static void checkOutAtReception (int id)
 {
+    printf("Group %d is checking out at reception\n", id);
+    // O codigo está preso neste semdown às vezes (depois dos 2 primeiros sairem)
+    
     if (semDown (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
         exit (EXIT_FAILURE);
-    }
-
+    } 
     // Update group status to CHECKOUT
     sh->fSt.st.groupStat[id] = CHECKOUT;
     saveState(nFic, &sh->fSt); // Save the state
