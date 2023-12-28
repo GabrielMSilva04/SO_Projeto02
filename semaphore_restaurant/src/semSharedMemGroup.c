@@ -200,6 +200,8 @@ static void eat (int id)
 static bool checkInAtReception(int id)
 {
     bool isFirstGroup = false;
+    bool onlyGroupWaiting = false;
+    bool peopleWaitedBefore = false;
 
     if (semDown(semgid, sh->mutex) == -1) {
         perror("error on the down operation for semaphore access (CT)");
@@ -208,31 +210,59 @@ static bool checkInAtReception(int id)
 
     // Check if this is the first group to check in
     if (sh->fSt.groupsWaiting == 0) {
+        onlyGroupWaiting = true;
+    }
+    for (int i = 0; i < MAXGROUPS; i++) {
+        if (sh->fSt.st.groupStat[i] > GOTOREST) {
+            peopleWaitedBefore = true;
+            break;
+        }
+    }
+    if(onlyGroupWaiting && !peopleWaitedBefore) {
         isFirstGroup = true;
     }
-    sh->fSt.groupsWaiting++;
 
+
+    sh->fSt.st.groupStat[id] = ATRECEPTION;
+    saveState(nFic, &sh->fSt);
+    sh->fSt.groupsWaiting++;
+    
     // Setup the request for the receptionist in shared memory
     sh->fSt.receptionistRequest.reqType = TABLEREQ;
     sh->fSt.receptionistRequest.reqGroup = id;
-    sh->fSt.st.groupStat[id] = ATRECEPTION;
 
-    saveState(nFic, &sh->fSt);
+
+    // Signal the receptionist for table request
+    if (semUp(semgid, sh->receptionistReq) == -1) {
+        perror("error on the up operation for receptionist request (GROUP)");
+        exit(EXIT_FAILURE);
+    }
 
     if (semUp(semgid, sh->mutex) == -1) {
         perror("error on the up operation for semaphore access (CT)");
         exit(EXIT_FAILURE);
     }
 
-    // Signal the receptionist that there is a new check-in request
-    if (semUp(semgid, sh->receptionistReq) == -1) {
-        perror("error on the up operation for receptionist request (GROUP)");
+    // Wait for the receptionist to assign a table
+    if (semDown(semgid, sh->waitForTable[id]) == -1) {
+        perror("error on the down operation for waiting for table (GROUP)");
         exit(EXIT_FAILURE);
     }
 
-    // Wait for the receptionist to assign a table
-    // This might involve waiting on a semaphore that the receptionist signals when a table is assigned
-    // ...
+
+    //while (true) {
+    //    int peopleAtTable = 0;
+    //    for (int i = 0; i < MAXGROUPS; i++) {
+    //        if (sh->fSt.st.groupStat[i] > ATRECEPTION && sh->fSt.st.groupStat[i] < CHECKOUT) {
+    //            peopleAtTable++;
+    //       }
+    //    }
+
+    //    if(peopleAtTable < NUMTABLES) {
+            //printf("Tables occupied: %d\n", peopleAtTable);
+    //        break;
+    //    }
+    //}
 
     return isFirstGroup;
 }
@@ -250,23 +280,21 @@ static bool checkInAtReception(int id)
  */
 static void orderFood (int id)
 {
-    // TODO insert your code here
+    sh->fSt.groupsWaiting--;
 
     if (semDown (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
         exit (EXIT_FAILURE);
     }
 
-    // TODO insert your code here
     // Update group status to ORDERING
     sh->fSt.st.groupStat[id] = FOOD_REQUEST;
     saveState(nFic, &sh->fSt); // Save the state
 
     // Send order to the waiter
-    // Assuming there is a structure like sh->fSt.waiterRequest
     sh->fSt.waiterRequest.reqType = FOODREQ;
     sh->fSt.waiterRequest.reqGroup = id;
-    saveState(nFic, &sh->fSt); // Save the state again
+    //saveState(nFic, &sh->fSt); // Save the state again
 
 
     if (semUp (semgid, sh->mutex) == -1) {                                                     /* exit critical region */
@@ -298,7 +326,6 @@ static void waitFood (int id)
         exit (EXIT_FAILURE);
     }
 
-    // TODO insert your code here
     // Update group status to WAIT_FOR_FOOD
     sh->fSt.st.groupStat[id] = WAIT_FOR_FOOD;
     saveState(nFic, &sh->fSt); // Save the state
@@ -309,7 +336,6 @@ static void waitFood (int id)
     }
 
 
-    // TODO insert your code here
     // Wait for the food to arrive
     // Assuming 'tableId' is known and valid for this group
     int tableId = sh->fSt.assignedTable[id];
@@ -324,8 +350,6 @@ static void waitFood (int id)
         exit (EXIT_FAILURE);
     }
 
-
-    // TODO insert your code here
     // Update group status to EAT
     sh->fSt.st.groupStat[id] = EAT;
     saveState(nFic, &sh->fSt); // Save the state again
@@ -349,32 +373,37 @@ static void waitFood (int id)
  */
 static void checkOutAtReception (int id)
 {
-    // TODO insert your code here
-
     if (semDown (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
         exit (EXIT_FAILURE);
     }
 
-    // TODO insert your code here
     // Update group status to CHECKOUT
     sh->fSt.st.groupStat[id] = CHECKOUT;
-    sh->fSt.receptionistRequest.reqType = BILLREQ; // BILLREQ for payment request
-    sh->fSt.receptionistRequest.reqGroup = id;
     saveState(nFic, &sh->fSt); // Save the state
 
+    sh->fSt.receptionistRequest.reqType = BILLREQ; // BILLREQ for payment request
+    sh->fSt.receptionistRequest.reqGroup = id;
+
+    if (semUp (semgid, sh->receptionistReq) == -1) {                                                  /* enter critical region */
+        perror ("error on the down operation for semaphore access (CT)");
+        exit (EXIT_FAILURE);
+    }
+
+    int tableId = sh->fSt.assignedTable[id];
 
     if (semUp (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
         perror ("error on the down operation for semaphore access (CT)");
         exit (EXIT_FAILURE);
     }
 
-    // TODO insert your code here
+
     // Wait for receptionist to acknowledge the payment
-    if (semDown(semgid, sh->tableDone[id]) == -1) { // Using tableDone semaphore for payment acknowledgment
+    if (semDown(semgid, sh->tableDone[tableId]) == -1) {
         perror("error on the down operation for payment received semaphore (CT)");
         exit(EXIT_FAILURE);
     }
+    
 
 
     if (semDown (semgid, sh->mutex) == -1) {                                                  /* enter critical region */
@@ -382,7 +411,6 @@ static void checkOutAtReception (int id)
         exit (EXIT_FAILURE);
     }
 
-    // TODO insert your code here
     // Update group status to LEAVING
     sh->fSt.st.groupStat[id] = LEAVING;
     saveState(nFic, &sh->fSt); // Save the state again
@@ -392,6 +420,5 @@ static void checkOutAtReception (int id)
         perror ("error on the down operation for semaphore access (CT)");
         exit (EXIT_FAILURE);
     }
-
 }
 
