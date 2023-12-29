@@ -238,7 +238,8 @@ static request waitForGroup()
     ret.reqGroup = sh->fSt.receptionistRequest.reqGroup;
     ret.reqType = sh->fSt.receptionistRequest.reqType;
 
-    if (semUp (semgid, sh->receptionistRequestPossible) == -1)      {                                             /* exit critical region */
+
+    if (semUp (semgid, sh->receptionistRequestPossible) == -1) {
         perror ("error on the up operation for receptionist semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
@@ -276,8 +277,9 @@ static void provideTableOrWaitingRoom (int n)
 
         if (tableId != -1) {
             // If a table is available
+
             // Update receptionist and group status
-            sh->fSt.st.receptionistStat = ASSIGNTABLE;  // Assuming ASSIGNTABLE is a defined state for assigning table
+            sh->fSt.st.receptionistStat = ASSIGNTABLE;
             saveState(nFic, &sh->fSt);  // Save the state
 
             // Assign the table to the group
@@ -325,14 +327,14 @@ static void receivePayment (int n)
     }
 
     // Update receptionist state to receiving payment
-    sh->fSt.st.receptionistStat = RECVPAY;  // Assuming RECVPAY is a defined state for receiving payment
+    sh->fSt.st.receptionistStat = RECVPAY;
     saveState(nFic, &sh->fSt);  // Save the state
     
     
     // Mark the table as vacant
     int tableId = sh->fSt.assignedTable[n];
 
-    if (semUp (semgid, sh->tableDone[tableId]) == -1)  {                                                  /* exit critical region */
+    if (semUp (semgid, sh->tableDone[tableId]) == -1)  {
      perror ("error on the down operation for receptionist semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
@@ -345,6 +347,8 @@ static void receivePayment (int n)
     if(sh->fSt.groupsWaiting > 0){
 
         int nextGroup = decideNextGroup();
+
+        // If there is a group waiting, assign the table to it
         if(nextGroup != -1){
             sh->fSt.assignedTable[nextGroup] = tableId;
             groupRecord[nextGroup] = ATTABLE;
