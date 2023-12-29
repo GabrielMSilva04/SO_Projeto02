@@ -127,9 +127,11 @@ int main (int argc, char *argv[])
         switch(req.reqType) {
             case TABLEREQ:
                    provideTableOrWaitingRoom(req.reqGroup); //TODO param should be groupid
+                   fprintf(stderr,"RT_%d: group %d went to table\n", getpid(), req.reqGroup);
                    break;
             case BILLREQ:
                    receivePayment(req.reqGroup);
+                   fprintf(stderr,"RT_%d: group %d payed\n", getpid(), req.reqGroup);
                    break;
         }
         nReq++;
@@ -153,45 +155,23 @@ int main (int argc, char *argv[])
  */
 static int decideTableOrWait(int n)
 {
-    //TODO insert your code here
-    if (semDown(semgid, sh->mutex) == -1) {  // enter critical region
-        perror("error on the down operation for semaphore access (RT)");
-        exit(EXIT_FAILURE);
-    }
-
-    // Check if the group is yet to arrive or is already done
-    if (groupRecord[n] == TOARRIVE || groupRecord[n] == DONE) {
-        if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
-            perror("error on the down operation for semaphore access (RT)");
-            exit(EXIT_FAILURE);
-        }
-        return -1;  // Indicate that the group cannot be assigned a table
-    }
-
-    // Check each table to see if it is available
+    int tablesOccupied = 0;
     for (int tableId = 0; tableId < NUMTABLES; tableId++) {
-        if (sh->fSt.assignedTable[tableId] == -1) {
-            // Assign the group to this table
-            sh->fSt.assignedTable[tableId] = n;  // Assign the table to the group
-            groupRecord[n] = ATTABLE;             // Update group record to ATTABLE
-
-            if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
-                perror("error on the down operation for semaphore access (RT)");
-                exit(EXIT_FAILURE);
-            }
-
-            return tableId;  // Return the table ID
+        if (sh->fSt.assignedTable[tableId] == 1) {
+            tablesOccupied++;
         }
     }
-
-    // If no table is available, the group must wait
-    groupRecord[n] = WAIT;  // Update group record to WAIT
-    if (semUp(semgid, sh->mutex) == -1) {  // exit critical region
-        perror("error on the down operation for semaphore access (RT)");
-        exit(EXIT_FAILURE);
+    if (tablesOccupied == NUMTABLES) {
+        return -1;  // Indicate that the group must wait
+    } else {
+        // Find the first vacant table
+        for (int tableId = 0; tableId < NUMTABLES; tableId++) {
+            if (sh->fSt.assignedTable[tableId] == -1) {
+                return tableId;  // Return the table ID
+            }
+        }
     }
-
-    return -1;
+    return -1;  // This should never be reached
 }
 
 /**
@@ -244,18 +224,16 @@ static int decideNextGroup()
  */
 static request waitForGroup()
 {
-    request req; 
+    request req = {0};  // Initialize req to default values
 
-    if (semDown (semgid, sh->mutex) == -1)  {                                                  /* enter critical region */
-        perror ("error on the up operation for semaphore access (WT)");
-        exit (EXIT_FAILURE);
+    // Enter critical region
+    if (semDown(semgid, sh->mutex) == -1) {
+        perror("error on the down operation for semaphore access (RT)");
+        exit(EXIT_FAILURE);
     }
 
-    // TODO insert your code here
-    // Update receptionist state to WAIT (or another appropriate defined state)
+    // Update receptionist state to WAIT and save the state
     sh->fSt.st.receptionistStat = WAIT;
-
-    // Save the state (if state saving is required)
     saveState(nFic, &sh->fSt);
 
     // Exit critical region
@@ -265,7 +243,11 @@ static request waitForGroup()
     }
 
     // Wait for a group to make a request
-    // ... (rest of the logic remains the same)
+    // ...
+
+    // Read the request from shared memory or another source
+    // Make sure req is assigned a value before returning
+    // ...
 
     return req;
 
