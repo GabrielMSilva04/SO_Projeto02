@@ -104,14 +104,10 @@ int main (int argc, char *argv[])
     int nReq=0;
     request req;
     while( nReq < sh->fSt.nGroups*2 ) {
-        puts("Começa a esperar");
         req = waitForClientOrChef();
-        puts("Acaba de esperar");
         switch(req.reqType) {
             case FOODREQ:
-                printf("Waiter received order from Group %d\n", req.reqGroup);
                 informChef(req.reqGroup);
-                puts("Waiter informed chef");
                 break;
             case FOODREADY:
                 takeFoodToTable(req.reqGroup);
@@ -143,6 +139,21 @@ static request waitForClientOrChef()
     request req;
     bool foundRequest = false;
 
+    if (semDown(semgid, sh->mutex) == -1) {
+        perror("error on the down operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+
+    // Update waiter's state to WAIT_FOR_REQUEST and save the state
+    sh->fSt.st.waiterStat = WAIT_FOR_REQUEST;
+    saveState(nFic, &sh->fSt);
+
+    if (semUp(semgid, sh->mutex) == -1) {
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+    
+    // Wait for a request from a group or chef
     while (!foundRequest) {
         if (semDown(semgid, sh->mutex) == -1) {
             perror("error on the down operation for semaphore access (WT)");
@@ -167,7 +178,6 @@ static request waitForClientOrChef()
                     req.reqType = FOODREADY;
                     req.reqGroup = i;
                     foundRequest = true;
-                    printf("Waiter served group %d\n", req.reqGroup);
                     break;
                 }
             }
@@ -216,7 +226,6 @@ static void informChef (int n)
 
 
     // Signal the chef that a request has been made
-    // Assuming there is a semaphore for the chef to wait on new requests
     if (semUp(semgid, sh->waitOrder) == -1) {
         perror("error on the up operation for chef request semaphore (WT)");
         exit(EXIT_FAILURE);
@@ -229,7 +238,6 @@ static void informChef (int n)
 
 
     // Wait for chef to acknowledge the request
-    // Assuming there is a semaphore for the waiter to wait on chef's response
     if (semDown(semgid, sh->orderReceived) == -1) {
         perror("error on the down operation for chef response semaphore (WT)");
         exit(EXIT_FAILURE);
@@ -254,14 +262,12 @@ static void informChef (int n)
  */
 static void takeFoodToTable(int n)
 {
-    printf("Waiter is taking food to group %d\n", n);
     if (semDown(semgid, sh->mutex) == -1) {
         perror("error on the down operation for semaphore access (WT)");
         exit(EXIT_FAILURE);
     }
 
     sh->fSt.st.waiterStat = TAKE_TO_TABLE; 
-    //sh->fSt.st.groupStat[n] = EAT;  // Update group's state to EAT
     saveState(nFic, &sh->fSt);
 
     int tableId = sh->fSt.assignedTable[n];  // Get the table number from the request
@@ -288,10 +294,6 @@ static void takeFoodToTable(int n)
         perror("error on the up operation for semaphore access (WT)");
         exit(EXIT_FAILURE);
     }
-
-
-    printf("Waiter has served food to group %d\n", n);
-
 
 }
 
