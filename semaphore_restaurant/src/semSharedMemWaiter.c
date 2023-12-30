@@ -153,6 +153,12 @@ static request waitForClientOrChef()
         exit(EXIT_FAILURE);
     }
     
+    // Signal readiness for new requests
+    if (semUp(semgid, sh->waiterRequestPossible) == -1) {
+        perror("error on the up operation for semaphore access (WT)");
+        exit(EXIT_FAILURE);
+    }
+    
     // Wait for a request from a group or chef
     while (!foundRequest) {
         if (semDown(semgid, sh->mutex) == -1) {
@@ -187,12 +193,6 @@ static request waitForClientOrChef()
             perror("error on the up operation for semaphore access (WT)");
             exit(EXIT_FAILURE);
         }
-    }
-
-    // Signal readiness for new requests
-    if (semUp(semgid, sh->waiterRequestPossible) == -1) {
-        perror("error on the up operation for semaphore access (WT)");
-        exit(EXIT_FAILURE);
     }
 
     return req;
