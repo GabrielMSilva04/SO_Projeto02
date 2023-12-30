@@ -215,15 +215,16 @@ static request waitForGroup()
         exit (EXIT_FAILURE);
     }
 
-    sh->fSt.st.receptionistStat = WAIT_FOR_REQUEST; // waiting for request
-    saveState(nFic, &sh->fSt); // Save the state
+    // Update receptionist status to WAIT_FOR_REQUEST and save the state
+    sh->fSt.st.receptionistStat = WAIT_FOR_REQUEST;
+    saveState(nFic, &sh->fSt);
 
     if (semUp (semgid, sh->mutex) == -1)      {                                             /* exit critical region */
         perror ("error on the down operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
 
-    // To stop receptionist from waiting for a request
+    // Wait for a group to make a request
     if (semDown(semgid, sh->receptionistReq) == -1) {
         perror("error on the down operation for receptionist semaphore access (WT)");
         exit(EXIT_FAILURE);
@@ -234,18 +235,19 @@ static request waitForGroup()
         exit (EXIT_FAILURE);
     }
 
-    // Read the request
+    // Copy the request details from shared memory
     ret.reqGroup = sh->fSt.receptionistRequest.reqGroup;
     ret.reqType = sh->fSt.receptionistRequest.reqType;
 
 
+    // Signal that the receptionist is ready for new requests
     if (semUp (semgid, sh->receptionistRequestPossible) == -1) {
         perror ("error on the up operation for receptionist semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
 
 
-    if (semUp (semgid, sh->mutex) == -1)      {                                             /* exit critical region */
+    if (semUp (semgid, sh->mutex) == -1) {                                             /* exit critical region */
         perror ("error on the up operation for semaphore access (WT)");
         exit (EXIT_FAILURE);
     }
@@ -269,18 +271,18 @@ static void provideTableOrWaitingRoom (int n)
         exit (EXIT_FAILURE);
     }
 
-
+    // Check if the group is arriving for the first time
     if (groupRecord[n] == TOARRIVE) {
 
         // Decide if the group can be assigned a table or must wait
-        int tableId = decideTableOrWait(n);  // This function should return a table ID or -1 if the group must wait
+        int tableId = decideTableOrWait(n);
 
         if (tableId != -1) {
             // If a table is available
 
-            // Update receptionist and group status
+            // Update receptionist status to ASSIGNTABLE and save the state
             sh->fSt.st.receptionistStat = ASSIGNTABLE;
-            saveState(nFic, &sh->fSt);  // Save the state
+            saveState(nFic, &sh->fSt);
 
             // Assign the table to the group
             sh->fSt.assignedTable[n] = tableId;
@@ -326,12 +328,12 @@ static void receivePayment (int n)
         exit (EXIT_FAILURE);
     }
 
-    // Update receptionist state to receiving payment
+    // Update receptionist state to receiving payment and save the state
     sh->fSt.st.receptionistStat = RECVPAY;
-    saveState(nFic, &sh->fSt);  // Save the state
+    saveState(nFic, &sh->fSt);
     
     
-    // Mark the table as vacant
+    // Identify the table being vacated
     int tableId = sh->fSt.assignedTable[n];
 
     if (semUp (semgid, sh->tableDone[tableId]) == -1)  {
@@ -340,24 +342,30 @@ static void receivePayment (int n)
     }
 
     groupRecord[n] = DONE;  // Update the internal receptionist view to indicate the group is done
-    sh->fSt.assignedTable[n] = -1; // -1 indicates the table is now vacant
+    sh->fSt.assignedTable[n] = -1; // Mark the table as vacant
     
 
     // Check if there are waiting groups
     if(sh->fSt.groupsWaiting > 0){
 
+        // Decide which group will be assigned next
         int nextGroup = decideNextGroup();
 
-        // If there is a group waiting, assign the table to it
         if(nextGroup != -1){
+            // If there is a group waiting
+
+            // Assign the table to the group
             sh->fSt.assignedTable[nextGroup] = tableId;
             groupRecord[nextGroup] = ATTABLE;
 
+
+            // Signal the group that it can proceed to the table
             if (semUp(semgid, sh->waitForTable[nextGroup]) == -1) {
                 perror("error on the up operation for group wait for table semaphore (RT)");
                 exit(EXIT_FAILURE);
             }
-
+            
+            // Decrease the number of groups waiting
             sh->fSt.groupsWaiting--;
         }
     }
